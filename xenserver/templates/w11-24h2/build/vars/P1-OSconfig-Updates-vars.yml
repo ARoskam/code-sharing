@@ -1,0 +1,11 @@
+---
+# This playbook contains variables for installing generic applications on Windows VMs using Winget.
+# It is designed to be used in conjunction with the P1-OSconfig-Updates.yml playbook.
+xentools_install_path: 'C:\temp\L1-Base\XenTools-9.4.0-x64-EN-v01\Invoke-AppDeployToolkit.exe'
+xentools_install_args: '-DeployMode NonInteractive'
+
+visual_c_runtimes_install_path: 'C:\temp\L1-Base\Visual-C-Runtimes-All-in-One\Invoke-AppDeployToolkit.exe'
+visual_c_runtimes_install_args: '-DeployMode NonInteractive'
+
+dotnet8_winget_id: 'Microsoft.DotNet.Runtime.8'
+dotnet8_winget_args: '--accept-source-agreements --accept-package-agreements -e'

@@ -1,0 +1,40 @@
+---
+# This playbook creates a Windows 11 VM on XenServer using Ansible.
+# It clones a VM from a specified template, attaches a custom ISO, and configures the VM with specified parameters.
+# The playbook is designed to be run in a CI/CD pipeline,
+# where the XenServer host, user credentials, and other parameters are provided as variables.
+
+- name: Create Windows 11 VM on XenServer
+  hosts: localhost
+  gather_facts: no
+  collections:
+    - community.general
+  vars:
+    ansible_python_interpreter: "/home/azadmin/myagent/_work/1/s/venv/bin/python"
+    xenserver_host: #<< IP Address or hostname of your XenServer>>
+    xenserver_user: #<< Username for XenServer >> default is "root"
+    xenserver_password: #<< Password for XenServer user >> If password is parsed as a variable use something like: "{{ lookup('env', 'XENSERVER_PASSWORD') }}"
+    template_name: #<< Name of the template to clone from >> Example: "Windows11-24H2-Template"
+    build_number: #<< Build number for the VM >> Example: "1.0.0". This is used to create a unique VM name based on the build number.
+    vm_name: #<< Name of the VM to be created >> Example: "Windows11-24H2-{{ build_number }}"
+    network_name: #<< Name of the network to attach the VM to >> Example: "XenServer-Internal"
+    iso_sr: #<< Name of the Storage Repository where the ISO is located >> Example: "ISO Repository"
+    iso_file: #<< Name of the ISO file to attach to the VM >> Example: "Windows11-24H2.iso"
+  tasks:
+    - name: Clone VM from template and attach custom ISO
+      community.general.xenserver_guest:
+        hostname: "{{ xenserver_host }}"
+        username: "{{ xenserver_user }}"
+        password: "{{ xenserver_password }}"
+        validate_certs: no
+        name: "{{ vm_name }}"
+        template: "{{ template_name }}"
+        state: poweredon
+        networks:
+          - name: "{{ network_name }}"
+        disks:
+          - size_gb: 64
+            sr: "{{ iso_sr }}"
+        cdrom:
+          type: iso
+          iso_name: "{{ iso_file }}"

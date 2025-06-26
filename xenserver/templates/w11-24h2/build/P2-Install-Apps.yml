@@ -1,0 +1,41 @@
+---
+# This playbook installs generic applications on Windows VMs using Winget.
+# It is designed to be run after the base configuration and updates have been applied.  
+# The playbook installs applications such as 7zip, Google Chrome, Visual Studio Code, Notepad++, and VLC Media Player.  
+
+- name: Install generic applications using Winget
+  hosts: win_vms
+  gather_facts: no
+  vars_files:
+    - ../build/vars/P2-Install-Apps-vars.yml
+  vars:
+    ansible_connection: winrm
+    ansible_port: 5985
+    ansible_winrm_server_cert_validation: ignore
+    ansible_user: Administrator
+    ansible_password: "{{ lookup('env', 'WIN_ADMIN_PASSWORD') }}"
+  tasks:
+    - name: Install 7zip
+      ansible.windows.win_shell: winget install --id {{ winget_7zip_id }} {{winget_install_args}}
+      register: winget_7zip
+      ignore_errors: yes
+
+    - name: Install Google Chrome
+      ansible.windows.win_shell: winget install --id {{ winget_chrome_id }} {{winget_install_args}}
+      register: winget_chrome
+      ignore_errors: yes
+
+    - name: Install Visual Studio Code
+      ansible.windows.win_shell: winget install --id {{ winget_vscode_id }} {{winget_install_args}}
+      register: winget_vscode
+      ignore_errors: yes
+
+    - name: Install Notepad++
+      ansible.windows.win_shell: winget install --id {{ winget_notepadpp_id }} {{winget_install_args}}
+      register: winget_notepadpp
+      ignore_errors: yes
+
+    - name: Install VLC Media Player
+      ansible.windows.win_shell: winget install --id {{ winget_vlc_id }} {{winget_install_args}}
+      register: winget_vlc
+      ignore_errors: yes

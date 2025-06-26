@@ -1,0 +1,84 @@
+name: $[format('{0}{1}.{2}', format('{0:yy}', pipeline.startTime), format('{0:MM}', pipeline.startTime), counter(format('{0:yy}{1:MM}', pipeline.startTime, pipeline.startTime), 1))]
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - #<<Path to files and folders>> Example: xenserver/golden images/w11-24h2/*
+
+
+pool:
+  name: #<<Azure DevOps Agent Pool>>
+
+#This step is used to install Ansible, Python venv, and dependencies.
+steps: 
+- script: |
+    sudo apt update
+    sudo apt install -y software-properties-common python3-pip python3-venv
+    sudo add-apt-repository --yes --update ppa:ansible/ansible
+    sudo apt install -y ansible jq
+    python3 -m venv venv
+    . venv/bin/activate
+    pip install XenAPI hvac
+    ansible-galaxy collection install community.general
+    ansible-galaxy collection install ansible.windows
+  displayName: 'Install Ansible, Python venv, and dependencies'
+
+# This step is used to pull secrets from HashiCorp Vault. Can be removed if not using Vault.
+# the secrets below are an example, replace with your own secrets.
+- script: |
+    . venv/bin/activate
+    WIN_ADMIN_PASSWORD=$(vault kv get -field=password secret/WIN_ADMIN_PASSWORD)
+    XENSERVER_PASSWORD=$(vault kv get -field=password secret/XENSERVER_PASSWORD)
+    DOMAINJOIN_PASSWORD=$(vault kv get -field=password secret/DOMAINJOIN_PASSWORD)
+    SOFTWARE_SHARE_USER=$(vault kv get -field=username secret/SOFTWARE_SHARE_PASSWORD)
+    SOFTWARE_SHARE_PASSWORD=$(vault kv get -field=password secret/SOFTWARE_SHARE_PASSWORD)    
+    echo "##vso[task.setvariable variable=WIN_ADMIN_PASSWORD;issecret=true]$WIN_ADMIN_PASSWORD"
+    echo "##vso[task.setvariable variable=DOMAINJOIN_PASSWORD;issecret=true]$DOMAINJOIN_PASSWORD"
+    echo "##vso[task.setvariable variable=SOFTWARE_SHARE_USER;issecret=true]$SOFTWARE_SHARE_USER"
+    echo "##vso[task.setvariable variable=XENSERVER_PASSWORD;issecret=true]$XENSERVER_PASSWORD"
+    echo "##vso[task.setvariable variable=SOFTWARE_SHARE_PASSWORD;issecret=true]$SOFTWARE_SHARE_PASSWORD"
+  displayName: 'Pull secrets from HashiCorp Vault'
+  env:
+    VAULT_TOKEN: $(VAULT_TOKEN)
+    VAULT_ADDR: $(VAULT_ADDR)
+
+# This step is used to create the Windows 11 24H2 VM on XenServer using Ansible.
+- script: |
+    . venv/bin/activate
+    ansible-playbook "xenserver/golden images/w11-24h2/vm-build.yml"
+  displayName: 'Create XenServer VM with Ansible'
+  env:
+    XENSERVER_PASSWORD: $(XENSERVER_PASSWORD)
+
+# This step is used to run the post-install actions on the created VM.
+- script: |
+    . venv/bin/activate
+    ansible-playbook -i "xenserver/golden images/w11-24h2/inventory.ini" "xenserver/golden images/w11-24h2/postinstall.yml"
+  displayName: 'Post-install actions'
+  env:
+    WIN_ADMIN_PASSWORD: $(WIN_ADMIN_PASSWORD)
+    XENSERVER_PASSWORD: $(XENSERVER_PASSWORD)
+    SOFTWARE_SHARE_USER: $(SOFTWARE_SHARE_USER)
+    SOFTWARE_SHARE_PASSWORD: $(SOFTWARE_SHARE_PASSWORD)
+
+# This step is used to run the build playbooks for the Windows 11 24H2 image.
+# The playbooks perform OS configuration, updates, and application installations.
+# Additional playbooks can be added as needed.
+
+- script: |
+    . venv/bin/activate
+    ansible-playbook -i "xenserver/golden images/w11-24h2/inventory.ini" "xenserver/golden images/w11-24h2/build/P1-OSconfig-Updates.yml"
+  displayName: 'OS configuration and updates'
+  env:
+    WIN_ADMIN_PASSWORD: $(WIN_ADMIN_PASSWORD)
+
+- script: |
+    . venv/bin/activate
+    ansible-playbook -i "xenserver/golden images/w11-24h2/inventory.ini" "xenserver/golden images/w11-24h2/build/P2-Install-Apps.yml"
+  displayName: 'Install applications using Winget'
+  env:
+    WIN_ADMIN_PASSWORD: $(WIN_ADMIN_PASSWORD)
+

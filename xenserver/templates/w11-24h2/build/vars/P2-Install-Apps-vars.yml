@@ -1,0 +1,13 @@
+---
+# This playbook contains variables for installing generic applications on Windows VMs using Winget. 
+# It is designed to be used in conjunction with the P2-Install-Apps.yml playbook.
+
+# Winget installation arguments
+winget_install_args: '--accept-source-agreements --accept-package-agreements -e'
+
+# Winget package IDs for generic applications
+winget_7zip_id: '7zip.7zip'
+winget_chrome_id: 'Google.Chrome'
+winget_vscode_id: 'Microsoft.VisualStudioCode'
+winget_notepadpp_id: 'Notepad++.Notepad++'
+winget_vlc_id: 'VideoLAN.VLC'

@@ -1,0 +1,92 @@
+---
+# This playbook is used to execute post-installation tasks on a Windows 11 VM created on XenServer.
+# It waits for the VM to be available via DNS and WinRM, generates an Ansible inventory file,
+# and performs post-installation configuration tasks such as copying software from a network share.
+
+- name: Wait for DNS and WinRM, then generate inventory for new Windows VM
+  hosts: localhost
+  gather_facts: no
+  collections:
+    - community.general
+  vars:
+    ansible_python_interpreter: "/home/azadmin/myagent/_work/1/s/venv/bin/python"
+    vm_name: #<< Name of the VM that was created >>
+    inventory_path: #<< path to inventory file >> Example: "./inventory.ini"
+    win_user: #<< Windows admin username >> Example: "Administrator"
+    win_password: #<< Windows admin password >> Example: "{{ lookup('env', 'WIN_ADMIN_PASSWORD') }}"
+    fqdn: #<< Fully Qualified Domain Name of the VM >> Example: "w11-24h2-b1.example.com"
+    xenserver_host: #<< IP Address or hostname of your XenServer >>
+    xenserver_user: #<< Username for XenServer >> default is "root"
+    xenserver_password: #<< Password for XenServer user >> If password is parsed as a variable use something like: "{{ lookup('env', 'XENSERVER_PASSWORD') }}"
+    dns_wait_retries: 60   # Wait up to 30 minutes (60*30s)
+    dns_wait_delay: 30
+  tasks:
+    # Wait for the VM to be available via DNS
+    - name: Wait for DNS to resolve the VM FQDN
+      ansible.builtin.shell: |
+        getent hosts {{ fqdn }}
+      register: dns_check
+      until: dns_check.rc == 0
+      retries: "{{ dns_wait_retries }}"
+      delay: "{{ dns_wait_delay }}"
+      delegate_to: localhost
+
+    # Wait for WinRM to become available on the new VM
+    - name: Wait for WinRM to become available on the new VM
+      ansible.builtin.wait_for:
+        host: "{{ fqdn }}"
+        port: 5985
+        delay: 10         # Wait 10 seconds before first check
+        timeout: 1800     # Wait up to 30 minutes (adjust as needed)
+        state: started
+      delegate_to: localhost
+
+    # Generate the Ansible inventory file for the new Windows VM
+    - name: Generate inventory.ini for WinRM
+      copy:
+        dest: "{{ inventory_path }}"
+        content: |
+          [win_vms]
+          {{ fqdn }} ansible_host={{ fqdn }} ansible_user={{ win_user }} ansible_password={{ win_password }} ansible_connection=winrm ansible_winrm_server_cert_validation=ignore
+    
+    - name: Debug generated inventory.ini
+      ansible.builtin.shell: |
+        cat {{ inventory_path }}
+      register: inventory_debug
+      delegate_to: localhost
+
+    - name: Show inventory.ini content
+      ansible.builtin.debug:
+        var: inventory_debug.stdout
+
+# This step is used to run post-installation tasks on the Windows 11 VM via WinRM.
+- name: Post-install configuration for Windows 11 VM via WinRM
+  hosts: win_vms
+  gather_facts: no
+  vars:
+    ansible_user: "Administrator"
+    ansible_password: "{{ lookup('env', 'WIN_ADMIN_PASSWORD') }}"
+    ansible_connection: winrm
+    ansible_winrm_server_cert_validation: ignore
+    ansible_port: 5985
+  vars_files:
+    - ../../golden images/w11-24h2/build/vars/postinstall-vars.yml
+  tasks:
+    - name: Wait for WinRM login to succeed
+      ansible.windows.win_shell: whoami
+      register: winrm_login
+      retries: 60
+      delay: 30
+      until: winrm_login is succeeded
+
+    - name: Ensure C:\temp exists
+      ansible.windows.win_file:
+        path: C:\temp
+        state: directory
+
+    # Copy software repository to C:\temp. Replace with your actual share or remove if not needed.
+    - name: Copy software repository to C:\temp
+      ansible.windows.win_shell: |
+        net use <<Network share>> /user:{{ software_share_user }} "{{ software_share_password }}"
+        robocopy "<<Network share>>" "C:\temp" /E /Z /R:2 /W:2
+        net use <<Network share>> /delete

@@ -1,0 +1,4 @@
+---
+# variables for post-installation tasks on Windows 11 24H2 VM
+software_share_user: "{{ lookup('env', 'SOFTWARE_SHARE_USER') }}"
+software_share_password: "{{ lookup('env', 'SOFTWARE_SHARE_PASSWORD') }}"
